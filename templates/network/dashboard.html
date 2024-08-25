@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Traffic</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Dashboard</title>
+    <style>
+        /* Basic reset */
+        body, h1, table, th, td {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            background-color: #f4f4f4;
+            color: #333;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;   
+        }
+        .user-info {
+            text-align: right;
+        }
+        .user-info span {
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        .user-info form {
+            display: inline;
+        }
+        .user-info button {
+            padding: 5px 10px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .user-info button:hover {
+            background-color: #0056b3;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #007bff;
+            color: #fff;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+        .pagination {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .pagination a {
+            margin: 0 5px;
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            text-decoration: none;
+            color: #007bff;
+            border-radius: 5px;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .pagination a:hover {
+            background-color: #007bff;
+            color: #fff;
+        }
+        .pagination a.active {
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+        }
+        .pagination .current {
+            display: inline-block;
+            padding: 8px 16px;
+            margin: 0 5px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            color: #333;
+        }
+        .form-container {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .button-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .button-container form {
+            display: inline;
+        }
+        .button-container button {
+            padding: 10px 20px;
+            background-color: #dc3545;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .button-container button:hover {
+            background-color: #c82333;
+        }
+
+        /*Loading CSS */
+        .loader {
+            width: fit-content;
+            font-weight: bold;
+            font-family: monospace;
+            font-size: 30px;
+            clip-path: inset(0 3ch 0 0);
+            animation: l4 1s steps(4) infinite;
+        }
+        .loader::before {
+            content:"Loading..."
+        }
+
+        @keyframes l4 {
+            to{clip-path: inset(0 -1ch 0 0)}
+        }
+        /*Loading positioning and backdrop blur */
+        #Loading {
+            display: none; /* Hidden by default */
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000; /* Ensure it is above other content */
+        }
+        #backdrop {
+            display: none; /* Hidden by default */
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+            backdrop-filter: blur(3px); /* Less intense blur effect */
+            z-index: 999; /* Ensure it is behind theLoading but above other content */
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Network Dashboard</h1>
+        <div class="user-info">
+            <span>Welcome, {{ user.first_name }}</span>
+            <form method="POST" action="{% url 'signout' %}">
+                {% csrf_token %}
+                <button type="submit">Sign Out</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Form to select the number of packets per page -->
+    <div class="form-container">
+        <form method="GET" action="">
+            <label for="items_per_page">Packets per page:</label>
+            <select name="items_per_page" id="items_per_page" onchange="this.form.submit()">
+                <option value="10" {% if items_per_page == 10 %}selected{% endif %}>10</option>
+                <option value="25" {% if items_per_page == 25 %}selected{% endif %}>25</option>
+                <option value="50" {% if items_per_page == 50 %}selected{% endif %}>50</option>
+                <option value="100" {% if items_per_page == 100 %}selected{% endif %}>100</option>
+            </select>
+            <input type="hidden" name="page" value="1">
+        </form>
+    </div>
+
+    <!-- Button to clear packets and start capture -->
+    <div class="button-container">
+        <form id="capture-form" method="POST" action="{% url 'clear_and_capture' %}" onsubmit="submitForm(); return false;">
+            {% csrf_token %}
+            <button type="submit">Clear All Packets and Restart Capture</button>
+        </form>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Source IP</th>
+                <th>Destination IP</th>
+                <th>Protocol</th>
+                <th>Length</th>
+                <th>Info</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for packet in page_obj %}
+            <tr>
+                <td>{{ packet.timestamp }}</td>
+                <td>{{ packet.source_ip }}</td>
+                <td>{{ packet.destination_ip }}</td>
+                <td>{{ packet.protocol }}</td>
+                <td>{{ packet.length }}</td>
+                <td>{{ packet.info }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Pagination controls -->
+    <div class="pagination">
+        <span class="step-links">
+            {% if page_obj.has_previous %}
+                <a href="?page=1&items_per_page={{ items_per_page }}">&laquo; First</a>
+                <a href="?page={{ page_obj.previous_page_number }}&items_per_page={{ items_per_page }}">Previous</a>
+            {% endif %}
+        </span>
+
+        {% for num in page_range %}
+            {% if num == page_obj.number %}
+                <span class="current">{{ num }}</span>
+            {% else %}
+                <a href="?page={{ num }}&items_per_page={{ items_per_page }}">{{ num }}</a>
+            {% endif %}
+        {% endfor %}
+
+        <span class="step-links">
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}&items_per_page={{ items_per_page }}">Next</a>
+                <a href="?page={{ page_obj.paginator.num_pages }}&items_per_page={{ items_per_page }}">Last &raquo;</a>
+            {% endif %}
+        </span>
+    </div>
+
+    <!--Loading and backdrop -->
+    <div id="backdrop"></div>
+    <div id="Loading" class="loader"></div>
+
+    <!-- JavaScript to handleLoading visibility -->
+    <script>
+        function submitForm() {
+            var form = document.getElementById('capture-form');
+            varLoading = document.getElementById('Loading');
+            var backdrop = document.getElementById('backdrop');
+
+            // ShowLoading and backdrop
+        Loading.style.display = 'block';
+            backdrop.style.display = 'block';
+
+            // Create a FormData object from the form
+            var formData = new FormData(form);
+
+            // Create an XMLHttpRequest
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', form.action, true);
+            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+            xhr.setRequestHeader('X-CSRFToken', formData.get('csrfmiddlewaretoken'));
+
+            // Set up a callback function for when the request completes
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    // On success, redirect to the packet list view
+                    window.location.reload() // This will reload the current page
+                } else {
+                    // Handle error
+                    console.error('An error occurred:', xhr.statusText);
+                }
+
+                // HideLoading and backdrop
+            Loading.style.display = 'none';
+                backdrop.style.display = 'none';
+            };
+
+            // Handle request errors
+            xhr.onerror = function() {
+                console.error('An error occurred while sending the request.');
+                // HideLoading and backdrop on error
+            Loading.style.display = 'none';
+                backdrop.style.display = 'none';
+            };
+
+            // Send the request
+            xhr.send(formData);
+        }
+    </script>
+</body>
+</html>
